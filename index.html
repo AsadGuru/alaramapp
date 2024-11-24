@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multiple Timers App</title>
+  <style>
+    /* CSS Styling */
+    body {
+      font-family: sans-serif;
+      background-color: #222;
+      color: white;
+      text-align: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 550px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #333;
+      border-radius: 10px;
+      transition: all 0.3s ease;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    input[type="number"] {
+      width: 50px;
+      padding: 5px;
+      margin: 0 5px;
+      text-align: center;
+    }
+
+    button {
+      background-color: #ffc107;
+      color: white;
+      padding: 10px 28px;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:disabled {
+      background-color: #444;
+      cursor: not-allowed;
+    }
+
+    button:hover {
+      background-color: #f57c00;
+    }
+
+    #setTimer {
+      background-color: #444;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+
+    #currentTimers {
+      margin-top: 20px;
+    }
+
+    .timer {
+      padding: 20px 40px;
+      margin: 10px 0;
+      background-color: #444;
+      color: #fff;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-evenly;
+      align-items: center;
+      font-size: 2em;
+      height: 30px;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .timer-ended {
+      background-color: rgb(193, 193, 36); /* Yellow background for ended timers */
+    }
+
+    .stop-btn,
+    .delete-btn,
+    .resume-btn {
+      background-color: #ffc107;
+      color: rgb(0, 0, 0);
+      padding: 10px 20px;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      position: absolute;
+      right: 20px;
+    }
+
+    .stop-btn:hover,
+    .delete-btn:hover,
+    .resume-btn:hover {
+      background-color: #000;
+      color: #fff;
+    }
+
+    .no-timers-message {
+      color: #ccc;
+      font-size: 16px;
+    }
+
+    .timer-finished-message {
+      font-size: 36px;
+      text-align: center;
+      color: rgb(0, 0, 0);
+    }
+
+    .time-left-text {
+      font-size: 26px;
+      color: #fff;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Multiple Timers App</h1>
+
+    <div id="setTimer">
+      <label for="hours">Set Time:</label>
+      <input type="number" id="hours" min="0" max="23" value="00"> :
+      <input type="number" id="minutes" min="0" max="59" value="00"> :
+      <input type="number" id="seconds" min="0" max="59" value="00">
+      <button id="startTimer" disabled>Set</button>
+    </div>
+
+    <div id="currentTimers">
+      <h2>Current Timers</h2>
+      <div id="active-timers-list"></div>
+    </div>
+  </div>
+
+  <audio id="alert-sound" src="alert-sound.mp3" preload="auto"></audio>
+
+  <script>
+    let timers = [];
+    let timerId = 0;
+
+    const startButton = document.getElementById("startTimer");
+    const hoursInput = document.getElementById("hours");
+    const minutesInput = document.getElementById("minutes");
+    const secondsInput = document.getElementById("seconds");
+
+    document.getElementById("startTimer").addEventListener("click", startNewTimer);
+
+    // Disable the start button if inputs are invalid
+    function validateInputs() {
+      const hours = parseInt(hoursInput.value);
+      const minutes = parseInt(minutesInput.value);
+      const seconds = parseInt(secondsInput.value);
+      startButton.disabled = hours < 0 || minutes < 0 || seconds < 0 || 
+                            (hours === 0 && minutes === 0 && seconds === 0);
+    }
+
+    hoursInput.addEventListener("input", validateInputs);
+    minutesInput.addEventListener("input", validateInputs);
+    secondsInput.addEventListener("input", validateInputs);
+
+    function startNewTimer() {
+      const hours = parseInt(hoursInput.value) || 0;
+      const minutes = parseInt(minutesInput.value) || 0;
+      const seconds = parseInt(secondsInput.value) || 0;
+
+      // Validate input
+      const totalTimeInSeconds = (hours * 3600) + (minutes * 60) + seconds;
+      if (totalTimeInSeconds <= 0) {
+        alert("Please enter a time greater than zero.");
+        return;
+      }
+
+      const newTimer = {
+        id: timerId++,
+        remainingTime: totalTimeInSeconds,
+        intervalId: null,
+        finished: false,
+        paused: false
+      };
+
+      timers.push(newTimer);
+      displayTimers();
+      startTimer(newTimer);
+    }
+
+    function startTimer(timer) {
+      timer.intervalId = setInterval(() => {
+        if (timer.remainingTime > 0 && !timer.paused) {
+          timer.remainingTime--;
+        } else if (timer.remainingTime === 0 && !timer.finished) {
+          clearInterval(timer.intervalId);
+          timer.finished = true;
+          handleTimerEnd(timer);
+        }
+        updateTimerDisplay(timer);
+      }, 1000);
+    }
+
+    function stopTimer(timerId) {
+      const timer = timers.find(t => t.id === timerId);
+      if (timer && timer.intervalId) {
+        clearInterval(timer.intervalId);
+        timer.paused = true;
+      }
+      displayTimers();
+    }
+
+    function resumeTimer(timerId) {
+      const timer = timers.find(t => t.id === timerId);
+      if (timer && !timer.finished) {
+        timer.paused = false;
+        startTimer(timer);
+      }
+    }
+
+    function deleteTimer(timerId) {
+      timers = timers.filter(timer => timer.id !== timerId);
+      displayTimers(); // Update the display after deletion
+    }
+
+    function displayTimers() {
+      const timerList = document.getElementById("active-timers-list");
+      timerList.innerHTML = "";
+
+      if (timers.length === 0) {
+        const noTimersMessage = document.createElement("div");
+        noTimersMessage.classList.add("no-timers-message");
+        noTimersMessage.textContent = "You have no timers currently!";
+        timerList.appendChild(noTimersMessage);
+      } else {
+        timers.forEach((timer) => {
+          const timerElement = document.createElement("div");
+          timerElement.classList.add("timer");
+
+          if (timer.finished) {
+            timerElement.classList.add("timer-ended");
+            timerElement.innerHTML = `
+              <span class="timer-finished-message">Timer Is Up!</span>
+            `;
+            const deleteButton = document.createElement("button");
+            deleteButton.classList.add("delete-btn");
+            deleteButton.textContent = "Delete";
+            deleteButton.onclick = () => deleteTimer(timer.id); // Corrected delete logic
+            timerElement.appendChild(deleteButton);
+          } else {
+            const timeLeft = formatTime(timer.remainingTime);
+            timerElement.innerHTML = `
+              <span class="time-left-text">Time Left: ${timeLeft}</span>
+            `;
+            if (timer.paused) {
+              const resumeButton = document.createElement("button");
+              resumeButton.classList.add("resume-btn");
+              resumeButton.textContent = "Resume";
+              resumeButton.onclick = () => resumeTimer(timer.id);
+              timerElement.appendChild(resumeButton);
+            } else {
+              const stopButton = document.createElement("button");
+              stopButton.classList.add("stop-btn");
+              stopButton.textContent = "Pause";
+              stopButton.onclick = () => stopTimer(timer.id);
+              timerElement.appendChild(stopButton);
+            }
+          }
+
+          timerList.appendChild(timerElement);
+        });
+      }
+    }
+
+    function handleTimerEnd(timer) {
+      const alertSound = document.getElementById("alert-sound");
+      alertSound.play();
+      displayTimers();
+    }
+
+    function updateTimerDisplay(timer) {
+      displayTimers();
+    }
+
+    function formatTime(seconds) {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secondsLeft = seconds % 60;
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secondsLeft.toString().padStart(2, '0')}`;
+    }
+  </script>
+</body>
+</html>
